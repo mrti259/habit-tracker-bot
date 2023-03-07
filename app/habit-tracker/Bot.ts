@@ -18,11 +18,19 @@ export class Bot {
     private storage: IStorage;
 
     constructor(private config: BotConfig) {
-        this.telegram = new Telegram(config.telegram_token);
+        this.telegram = new Telegram(config.telegram_token, ['message']);
         this.storage = new NotionStorage(config.notion);
     }
 
-    webhookSetter = async () => {
+    async getUpdates() {
+        await this.telegram.deleteWebhook();
+        const updates = await this.telegram.getUpdates();
+        for (const update of updates) {
+            await this.handleUpdate(update);
+        }
+    }
+
+    async webhookSetter() {
         const url = this.config.app_url + '/api/webhook';
         const secret_token = this.config.secret_token;
         const response = await this.telegram.setWebhook({
@@ -30,22 +38,37 @@ export class Bot {
             secret_token,
         });
         return response;
-    };
+    }
 
-    updateHandler = async (
+    async webhookHandler(
         headers: Record<string, string | string[] | undefined>,
         body: {
-            message: {
-                chat: { id: number; first_name: string; last_name?: string };
+            update_id: number;
+            message?: {
+                chat: { id: number; first_name?: string; last_name?: string };
                 text: string;
             };
         },
-    ) => {
+    ) {
         if (!this.acceptUpdateOrigin(headers)) {
-            return false;
+            return;
         }
-        const { chat, text } = body.message;
-        const { id: chat_id, first_name, last_name = '' } = chat;
+        await this.handleUpdate(body);
+    }
+
+    private async handleUpdate(update: {
+        update_id: number;
+        message?: {
+            chat: { id: number; first_name?: string; last_name?: string };
+            text: string;
+        };
+    }) {
+        const { message } = update;
+        if (!message) return;
+
+        const { chat, text } = message;
+        const { id: chat_id, first_name, last_name } = chat;
+
         const tracker = await HabitTracker.forChat(
             { id: chat_id, name: `${first_name} ${last_name}`.trim() },
             this.storage,
@@ -54,22 +77,21 @@ export class Bot {
             await this.telegram.sendMessage(chat_id, msg);
         };
         tracker.onCommand('/start', () => reply('hola'));
-        tracker.onItemAdded(async (meal, item) => {
-            await Promise.all([
-                reply(`${item} agregado a ${meal}`),
-                tracker.report(),
-            ]).then(([_, report]) => reply(report));
-        });
-        tracker.onRejection(async (reason) => {
-            if (reason === RejectionReason.UNKNOWN_CHAT) {
-                await reply('No estás autorizado a usar el bot');
-            }
-            await reply(`Ingresá un comando del menú con el item a agregar.
-Por ejemplo, "/desayuno café"`);
-        });
-
+        tracker.onCommand('/reporte', () =>
+            tracker.report().then((report) => reply(report)),
+        );
+        tracker.onItemAdded((meal, item) =>
+            reply(`${item} agregado a ${meal}`),
+        );
+        tracker.onChatUnknown(() => reply('No estás autorizado a usar el bot'));
+        tracker.onCommandUnknown(() =>
+            reply(`Ingresá un comando del menú con el item a agregar.
+Por ejemplo, "/desayuno café"`),
+        );
+        tracker.onCommandError(() => reply('Ocurrió un error'));
         await tracker.accept(text);
-    };
+        this.telegram.updateOffset(update.update_id + 1);
+    }
 
     private acceptUpdateOrigin(
         headers: Record<string, string | string[] | undefined>,

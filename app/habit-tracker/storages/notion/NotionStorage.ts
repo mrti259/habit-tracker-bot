@@ -12,6 +12,7 @@ export type NotionStorageConfig = {
     dbhabit_id: string;
     dbitem_id: string;
     dbuser_id: string;
+    cache?: boolean;
 };
 
 export class NotionStorage implements IStorage {
@@ -25,9 +26,20 @@ export class NotionStorage implements IStorage {
             client,
             config.dbhabit_id,
             habitSchema,
+            config.cache,
         );
-        this.itemDatabase = new Database(client, config.dbitem_id, itemSchema);
-        this.userDatabase = new Database(client, config.dbuser_id, userSchema);
+        this.itemDatabase = new Database(
+            client,
+            config.dbitem_id,
+            itemSchema,
+            config.cache,
+        );
+        this.userDatabase = new Database(
+            client,
+            config.dbuser_id,
+            userSchema,
+            config.cache,
+        );
     }
 
     async getItemsFromHabit(habit: string): Promise<Array<string>> {
@@ -60,5 +72,10 @@ export class NotionStorage implements IStorage {
             { name: chat.name, chat_id: chat.id, auth: false },
         ]);
         return users[0];
+    }
+
+    // Testing
+    async deleteCached() {
+        await this.itemDatabase.deleteCached();
     }
 }

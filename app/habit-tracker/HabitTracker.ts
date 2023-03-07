@@ -3,7 +3,9 @@ import { IStorage } from './storages/IStorage';
 
 type CommandCallback = (command: string) => void;
 type ItemAddedCallback = (habit: string, item: string) => void;
-type RejectionCallback = (reason: RejectionReason) => void;
+type ChatUnknownCallback = () => void;
+type CommandUnknownCallback = () => void;
+type CommandErrorCallback = () => void;
 
 export enum RejectionReason {
     UNKNOWN_CHAT = 'unknown_chat',
@@ -69,18 +71,21 @@ export class HabitTracker {
 
     async accept(message: string): Promise<boolean> {
         if (!this.auth) {
-            this.triggerRejectionCallbacks(RejectionReason.UNKNOWN_CHAT);
+            await this.triggerChatUnknownCallbacks();
             return false;
         }
+        let handled = await this.handleMessage(message);
+        if (handled) return true;
+        await this.triggerCommandUnknownCallbacks();
+        return false;
+    }
+
+    private async handleMessage(message: string) {
         let handled = false;
         for (const command of this.eventSubscriptions.command.keys()) {
             handled ||= await this.handleCommand(command, message);
         }
-        if (!handled) {
-            this.triggerRejectionCallbacks(RejectionReason.UNKNOWN_COMMAND);
-            return false;
-        }
-        return true;
+        return handled;
     }
 
     private async handleCommand(
@@ -94,9 +99,8 @@ export class HabitTracker {
         const result = await Promise.allSettled(
             subscriptions!.map((cb) => cb(message)),
         );
-        if (result.some((promise) => promise.status !== 'fulfilled')) {
-            this.triggerRejectionCallbacks(RejectionReason.COMMAND_ERROR);
-        }
+        if (result.every((p) => p.status === 'fulfilled')) return true;
+        this.triggerCommandErrorCallbacks();
         return true;
     }
 
@@ -150,7 +154,9 @@ Agua:
     private eventSubscriptions = {
         command: new Map<string, Array<CommandCallback>>(),
         itemAdded: [] as Array<ItemAddedCallback>,
-        rejected: [] as Array<RejectionCallback>,
+        chatUnknown: [] as Array<ChatUnknownCallback>,
+        commandUnknown: [] as Array<CommandUnknownCallback>,
+        commandError: [] as Array<CommandErrorCallback>,
     };
 
     onCommand(command: string, callback: CommandCallback) {
@@ -163,8 +169,16 @@ Agua:
         this.eventSubscriptions.itemAdded.push(callback);
     }
 
-    onRejection(callback: RejectionCallback) {
-        this.eventSubscriptions.rejected.push(callback);
+    onChatUnknown(callback: ChatUnknownCallback) {
+        this.eventSubscriptions.chatUnknown.push(callback);
+    }
+
+    onCommandUnknown(callback: CommandUnknownCallback) {
+        this.eventSubscriptions.commandUnknown.push(callback);
+    }
+
+    onCommandError(callback: CommandErrorCallback) {
+        this.eventSubscriptions.commandError.push(callback);
     }
 
     private async triggerItemAddedCallbacks(habit: string, item: string) {
@@ -173,9 +187,21 @@ Agua:
         );
     }
 
-    private async triggerRejectionCallbacks(reason: RejectionReason) {
+    private async triggerChatUnknownCallbacks() {
         await Promise.allSettled(
-            this.eventSubscriptions.rejected.map((cb) => cb(reason)),
+            this.eventSubscriptions.chatUnknown.map((cb) => cb()),
+        );
+    }
+
+    private async triggerCommandUnknownCallbacks() {
+        await Promise.allSettled(
+            this.eventSubscriptions.commandUnknown.map((cb) => cb()),
+        );
+    }
+
+    private async triggerCommandErrorCallbacks() {
+        await Promise.allSettled(
+            this.eventSubscriptions.commandError.map((cb) => cb()),
         );
     }
 }

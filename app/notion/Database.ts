@@ -21,13 +21,18 @@ export type Properties = PageObjectResponse['properties'];
 
 export class Database<T> {
     constructor(
-        protected client: Client,
-        protected database_id: string,
-        protected schema: Schema<T>,
+        private client: Client,
+        private database_id: string,
+        private schema: Schema<T>,
+        private cached?: boolean,
     ) {}
 
-    protected mapPages(pages: Array<Page>) {
-        return pages.map((page) => this.schema.mapPage(page));
+    private mapPages(pages: Array<Page>) {
+        const results = pages.map((page) => this.schema.mapPage(page));
+        if (this.cached) {
+            results.forEach((result) => this.cache.add(result));
+        }
+        return results;
     }
 
     async query(searchParams: SearchParams<T>) {
@@ -72,7 +77,7 @@ export class Database<T> {
         return this.mapPages(pages);
     }
 
-    async delete(models: Identificable<T>[]) {
+    async delete(models: Array<Identificable<T>>) {
         const pages = await Promise.all(
             models.map((model) =>
                 this.client.blocks.delete({ block_id: model.id }),
@@ -82,5 +87,12 @@ export class Database<T> {
         return pages.map(({ id }) => {
             id;
         });
+    }
+
+    // Testing
+    private cache: Set<Identificable<T>> = new Set();
+
+    async deleteCached() {
+        await this.delete(Array.from(this.cache));
     }
 }

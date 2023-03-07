@@ -155,8 +155,8 @@ export class DateProperty extends Property<Date> {
         const year = value.getFullYear();
         const month = value.getMonth();
         const day = value.getDay();
-        const f = (n: number) => n.toString().padStart(2);
-        return `${f(year)}-${f(month)}-${f(day)}`;
+        const f = (n: number) => n.toString().padStart(2, '0');
+        return `${year}-${f(month)}-${f(day)}`;
     }
 
     protected _filter(value: Date): Filter {

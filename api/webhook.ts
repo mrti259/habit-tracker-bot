@@ -5,6 +5,6 @@ import { bot } from '../app/bot';
 export default async function (req: VercelRequest, res: VercelResponse) {
     const headers = req.headers;
     const body = req.body;
-    await bot.updateHandler(headers, body);
+    await bot.webhookHandler(headers, body);
     return res.send(true);
 }

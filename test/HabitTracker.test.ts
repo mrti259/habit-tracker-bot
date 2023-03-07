@@ -342,36 +342,56 @@ test('Identificar chat no autorizado', async () => {
     assert(!accepted, 'should be false');
 });
 
+// Rejections
+
 test('Notificar rechazo por chat desconocido', async () => {
-    let reasonResult;
+    let updated = false;
     tracker = HabitTracker.forUnknownUser(new Storage());
-    tracker.onRejection((reason) => (reasonResult = reason));
+    tracker.onChatUnknown(() => (updated = true));
     await tracker.accept('/desayuno cafe');
-    assert.equal(reasonResult, RejectionReason.UNKNOWN_CHAT);
+    assert(updated);
+});
+
+test('Notificar rechazo solo cuando se interactua con un chat desconocido', async () => {
+    let updated = false;
+    tracker = HabitTracker.forUnknownUser(new Storage());
+    tracker.onChatUnknown(() => (updated = true));
+    assert(!updated);
+    await tracker.accept('desayuno cafe');
+    assert(updated);
 });
 
 test('Notificar rechazo por comando desconocido', async () => {
-    let reasonResult;
+    let updated = false;
     tracker = HabitTracker.forKnownUser(new Storage());
-    tracker.onRejection((reason) => (reasonResult = reason));
+    tracker.onCommandUnknown(() => (updated = true));
     await tracker.accept('desayuno cafe');
-    assert.equal(reasonResult, RejectionReason.UNKNOWN_COMMAND);
+    assert(updated);
 });
 
 test('Notificar rechazo solo cuando se ejecuta un comando desconocido', async () => {
-    let reasonResult;
+    let updated = false;
     tracker = HabitTracker.forKnownUser(new Storage());
-    tracker.onRejection((reason) => (reasonResult = reason));
+    tracker.onCommandUnknown(() => (updated = true));
     await tracker.accept('/desayuno cafe');
-    assert.equal(reasonResult, undefined);
+    assert(!updated);
     await tracker.accept('desayuno cafe');
-    assert.equal(reasonResult, RejectionReason.UNKNOWN_COMMAND);
+    assert(updated);
 });
 
 test('Notificar rechazo por error en CommandCallback', async () => {
-    let reasonResult;
+    let updated = false;
     tracker = HabitTracker.forKnownUser(new Storage());
-    tracker.onRejection((reason) => (reasonResult = reason));
+    tracker.onCommandError(() => (updated = true));
     await tracker.accept('/desayuno');
-    assert.equal(reasonResult, RejectionReason.COMMAND_ERROR);
+    assert(updated);
+});
+
+test('Notificar rechazo solo cuando ocurre un error en un comando', async () => {
+    let updated = false;
+    tracker = HabitTracker.forKnownUser(new Storage());
+    tracker.onCommandError(() => (updated = true));
+    assert(!updated);
+    await tracker.accept('/desayuno');
+    assert(updated);
 });
