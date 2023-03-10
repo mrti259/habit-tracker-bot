@@ -153,8 +153,8 @@ export class CheckboxProperty extends Property<boolean> {
 export class DateProperty extends Property<Date> {
     private format(value: Date): string {
         const year = value.getFullYear();
-        const month = value.getMonth();
-        const day = value.getDay();
+        const month = value.getMonth() + 1;
+        const day = value.getDate();
         const f = (n: number) => n.toString().padStart(2, '0');
         return `${year}-${f(month)}-${f(day)}`;
     }
